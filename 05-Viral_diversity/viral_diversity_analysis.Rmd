@@ -1,0 +1,100 @@
+---
+title: "Viral diversity in fire ant queens"
+authors: Anindita Brahma, Yannick Wurm
+output: viral_diversity_fire_ants.html
+---
+#Introduction
+This script contains comparison of viral diversity between fire ant queens from single- and multiple-queen colonies.
+Input datasets include metadata (.csv) generated from counting the number of viral species present in each sample.
+Metadata is available in supplementary datasets (Metadata for Fig 1B, Metadata for Fig 1D)
+
+```{r setup, include=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+libraries <- c("dplyr", "ape", "geiger", "phytools",
+               "nlme", "ggplot2", "lintr", "lme4", "MASS",
+               "RColorBrewer", "viridis", "shades", "effects", "DHARMa")
+for (lib in libraries) {
+  if (require(package = lib, character.only = TRUE)) {
+    message("Library loaded: ", lib)
+  } else {
+    print("Installing")
+    BiocManager::install(lib, Ncpus = 10, update = TRUE)
+    library(lib, character.only = TRUE)
+    message("Library loaded: ", lib)
+  }
+}
+```
+#Analysis with all six datasets: Metadata for Fig 1B (supplementary dataset)
+
+```{r}
+#Import dataset
+metadata <- read.table(file = "metadata.csv",
+                                        header = TRUE, sep = ",")
+#Fit the model
+viral_diversity <- glmer(virus_species_count ~ social_form +
+                                 (1|experiment_id),
+                                 family = poisson(link = "log"),
+                               data = metadata)
+summary(viral_diversity)
+
+#Check for overdispersion and non-uniformity of residuals
+sim_output <- simulateResiduals(fittedModel = viral_diversity)
+testDispersion(simulationOutput = sim_output)
+testUniformity(sim_output)
+
+#Calculate model estimates and confidence intervals
+summary(allEffects(viral_diversity))
+
+#Figure 1B
+viral_diversity_boxplot <- ggplot(data = metadata,
+                          mapping = aes(x = social_form,
+                                        y = virus_species_count,
+                                        fill = social_form)) +
+  geom_boxplot() +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', binwidth = 0.15,
+               stackratio = 1, position = position_dodge(1)) +
+  theme_bw() +
+  ylab("Number of viral species") +
+  xlab("Social form") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_fill_brewer(palette = "Greys") +
+  scale_y_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12))
+```
+
+#Focused analysis with one dataset: Metadata for Fig 1D (supplementary dataset)
+```{r}
+#Import dataset
+metadata <- read.table(file = "metadata.csv",
+                                        header = TRUE, sep = ",")
+#Fit the model
+viral_diversity_focused <- glmer(virus_species_count ~ social_form + genotype +
+                           (1|colony_id/sample_id),
+                         family = poisson(link = "log"),
+                         data = metadata)
+summary(viral_diversity_focused)
+
+#Check for overdispersion and non-uniformity of residuals
+sim_output <- simulateResiduals(fittedModel = viral_diversity_focused)
+testDispersion(simulationOutput = sim_output)
+testUniformity(sim_output)
+
+#Calculate model estimates and confidence intervals
+summary(allEffects(viral_diversity_focused))
+
+#Figure 1D
+viral_diversity_focused_boxplot <- ggplot(data = metadata,
+                                          mapping = aes(x = social_form,
+                                                        y = virus_species_count,
+                                                        fill = genotype)) +
+  geom_boxplot() +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', binwidth = 0.08,
+               stackratio = 1, position = position_dodge(1)) +
+  theme_bw() +
+  ylab("Number of viral species") +
+  xlab("Social form") +
+  scale_y_continuous(breaks = c(0, 2, 4, 6, 8)) +
+  scale_fill_brewer(palette = "Greys")
+
+```

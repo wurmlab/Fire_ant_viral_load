@@ -1,0 +1,197 @@
+---
+title: "Viral load in fire ant queens"
+authors: Anindita Brahma, Yannick Wurm
+output: viral_load_fire_ants.html
+---
+#Introduction
+This script contains comparison of viral load between fire ant queens from single- and multiple-queen colonies.
+Input datasets include metadata (.csv) generated from extracted reads assigned to viral families.
+Metadata is available in supplementary dataset (Metadata for Fig 1A, Metadata for Fig 1C)
+
+```{r setup, include=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+libraries <- c("dplyr", "lme4", "MASS", "lattice",
+               "glmmTMB", "car", "dplyr", "blme",
+               "logspline", "fitdistrplus",
+               "ggplot2", "ggpubr", "lintr",
+               "RColorBrewer", "scales", "DHARMa", "effects")
+for (lib in libraries) {
+  if (require(package = lib, character.only = TRUE)) {
+    message("Library loaded: ", lib)
+  } else {
+    print("Installing")
+    BiocManager::install(lib, Ncpus = 10, update = TRUE)
+    library(lib, character.only = TRUE)
+    message("Library loaded: ", lib)
+  }
+}
+
+```
+#Analysis with all six datasets: Metadata for Fig 1A (supplementary dataset)
+
+```{r}
+#Import dataset
+metadata <- read.table(file = "metadata.csv",
+                                        header = TRUE, sep = ",")
+
+#Add a column for percentage_read for each viral family
+metadata$percentage_read <- (metadata$proportion_read) * 100
+
+#Calculate sum of proportion read for each individual
+all_id_vec <- unique(metadata$sample_id)
+
+#Create dataframe to gather information from each unique id
+all_id_sum_of_reads <- as.data.frame(matrix(ncol = 4,
+                                            nrow = length(all_id_vec)))
+
+colnames(all_id_sum_of_reads) <- c("sample_id", "total_virus_reads", "sum_proportion_read", "sum_percentage_read")
+
+all_id_sum_of_reads$id <- all_id_vec
+
+#Gather details for each sample
+sample_details <- metadata %>% distinct(sample_id, social_form, tissue, caste,
+                                                  experiment_id, total_read)
+
+#Add the proportion_reads and percentage_reads from all viral famililies for each sample
+for (position in seq_len(length(all_id_vec))) {
+   print(position)
+   
+  #Subset metadata for each sample
+   virus_read <- subset(x = metadata,
+                              subset = id == all_id_vec[position],
+                              select = fragment_number)
+   prop_read <- subset(x = metadata,
+                       subset = id == all_id_vec[position],
+                       select = proportion_read)
+   percent_read <- subset(x = metadata,
+                       subset = id == all_id_vec[position],
+                       select = percentage_read)
+                       
+   #Sum of toral_virus_reads, proportion read, percentage_reads
+   total_virus_read <- sum(data.matrix(virus_read))
+   sum_prop_read <- sum(data.matrix(prop_read))
+   sum_percent_read <- sum(data.matrix(percent_read))
+   all_id_sum_of_reads$total_virus_reads[position] <- total_virus_read
+   all_id_sum_of_reads$sum_proportion_read[position] <- sum_prop_read
+   all_id_sum_of_reads$sum_percentage_read[position] <- sum_percent_read
+   
+}
+
+#Add the sample_details
+all_id_prop_read <- merge(x = sample_details,
+                                      y = all_id_sum_of_reads)
+#Fit the model
+viral_load <- glmer(sum_proportion_read ~ social_form +
+                                      (1|experiment_id/sample_id),
+                               family = binomial(link = "log"),
+                               weights = total_read,
+                               data = all_id_prop_read)
+                  
+summary(viral_load)
+
+#Check for overdispersion and non-uniformity of residuals
+sim_output <- simulateResiduals(fittedModel = viral_load)
+testDispersion(simulationOutput = sim_output)
+testUniformity(sim_output)
+
+#Calculate model estimates and confidence intervals
+summary(allEffects(viral_load))
+
+#Figure 1A
+viral_load_boxplot <- ggplot(data = all_id_prop_read,
+       mapping = aes(x = social_form, y = sum_percentage_read, fill = social_form)) +
+  geom_boxplot() +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', binwidth = 0.06,
+               stackratio = 1, position = position_dodge(1)) +
+  ylab("Percentage of viral reads") +
+  xlab("Social form") +
+  theme_bw() +
+  scale_y_continuous(trans = "log", breaks = c(0.01, 1, 20)) +
+  scale_fill_manual(values = palette_metadata)
+
+
+```
+#Focused analysis with one dataset: Metadata for Fig 1C (supplementary dataset)
+```{r}
+#Import dataset
+metadata <- read.table(file = "metadata",
+                                   header = TRUE, sep = ",")
+#Add a column for percentage_read for each viral family
+metadata$percentage_read <- (metadata$proportion_read) * 100
+
+#Calculate sum of proportion read for each individual
+all_id_vec <- unique(metadata$sample_id)
+
+#Create dataframe to gather information from each unique id
+all_id_sum_of_reads <- as.data.frame(matrix(ncol = 4,
+                                            nrow = length(all_id_vec)))
+
+colnames(all_id_sum_of_reads) <- c("sample_id", "total_virus_reads", "sum_proportion_read", "sum_percentage_read")
+
+all_id_sum_of_reads$id <- all_id_vec
+
+#Gather details for each sample
+sample_details <- metadata %>% distinct(sample_id, social_form, caste, colony_id,
+                                                 genotype, experiment_id, total_read)
+
+#Add the proportion_reads and percentage_reads from all viral famililies for each sample
+for (position in seq_len(length(all_id_vec))) {
+   print(position)
+   
+  #Subset metadata for each sample
+   virus_read <- subset(x = metadata,
+                              subset = id == all_id_vec[position],
+                              select = fragment_number)
+   prop_read <- subset(x = metadata,
+                       subset = id == all_id_vec[position],
+                       select = proportion_read)
+   percent_read <- subset(x = metadata,
+                       subset = id == all_id_vec[position],
+                       select = percentage_read)
+                       
+   #Sum of toral_virus_reads, proportion read, percentage_reads
+   total_virus_read <- sum(data.matrix(virus_read))
+   sum_prop_read <- sum(data.matrix(prop_read))
+   sum_percent_read <- sum(data.matrix(percent_read))
+   all_id_sum_of_reads$total_virus_reads[position] <- total_virus_read
+   all_id_sum_of_reads$sum_proportion_read[position] <- sum_prop_read
+   all_id_sum_of_reads$sum_percentage_read[position] <- sum_percent_read
+   
+}
+
+#Add the sample_details
+all_id_prop_read <- merge(x = sample_details,
+                                      y = all_id_sum_of_reads)
+
+#Fit the model
+viral_load_focused <- glmer(sum_proportion_read ~ social_form + genotype +
+                                      (1|colony_id/sample_id),
+                               family = binomial(link = "log"),
+                               weights = total_read,
+                               data = all_id_prop_read)
+                  
+summary(viral_load_focused)
+
+#Check for overdispersion and non-uniformity of residuals
+sim_output <- simulateResiduals(fittedModel = viral_load_focused)
+testDispersion(simulationOutput = sim_output)
+testUniformity(sim_output)
+
+#Calculate model estimates and confidence intervals
+summary(allEffects(viral_load_focused))
+
+#Figure 1C
+viral_load_focused_boxplot <- ggplot(data = all_id_prop_read,
+       mapping = aes(x = social_form, y = sum_percentage_read, fill = genotype)) +
+  geom_boxplot() +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', binwidth = 0.06,
+               stackratio = 1, position = position_dodge(1)) +
+  ylab("Percentage of viral reads") +
+  xlab("Social form") +
+  theme_bw() +
+   scale_y_continuous(trans = "log", breaks = c(0.01, 1, 10)) +
+   scale_fill_brewer(palette = "Greys")
+
+```

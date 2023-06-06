@@ -1,0 +1,57 @@
+---
+title: "viral_diversity_metadata"
+authors: Anindita Brahma, Yannick Wurm
+output: viral_diversity_metadata.html
+---
+#Introduction
+This script is for preparing metadata for viral diversity analyses.
+Input data contains extracted viral reads from Kraken2 reports.
+
+```{r setup, include=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+libraries <- c("dplyr", "lme4",
+               "ggplot2", "lintr", "plyr")
+for (lib in libraries) {
+  if (require(package = lib, character.only = TRUE)) {
+    message("Library loaded: ", lib)
+  } else {
+    print("Installing")
+    BiocManager::install(lib, Ncpus = 10, update = TRUE)
+    library(lib, character.only = TRUE)
+    message("Library loaded: ", lib)
+  }
+}
+```
+#Prepare metadata for viral diversity analysis.
+#Count the number of viral species containing more than 100 reads.
+
+```{r}
+# Write a function
+# sample: sample_id_viral_load.txt obtained from 02-Extract_virus_reads
+
+virus_species <- function(sample) {
+  sample <- read.table(file = sample, header = FALSE,
+                        sep = "\t", quote = "")
+  colnames(sample) <- c("percentage_reads", "fragment_number",
+                       "fragment_assigned", "tax_unit",
+                       "taxid" ,"name")
+  #subset for family
+  sample_species <- subset(x = sample, subset = tax_unit == "S")
+  #remove whitespace from name
+   species_name <- data.frame(gsub('\\s+', '', sample_species$name))
+   colnames(species_name) <- "species_name"
+   #add column
+   sample_species$species_name <- species_name$species_name
+   #sample species with fragment number > 100
+   sample_species_subset <- subset(x = sample_species,
+                                   subset = fragment_number > 100)
+   #get the total count of different virus families in the sample
+   virus_species_count <- length(unique(sample_species_subset$species_name))
+   return(virus_species_count)
+}
+
+# Use this function to extract virus families from sample_id_viral_load.txt
+```
+

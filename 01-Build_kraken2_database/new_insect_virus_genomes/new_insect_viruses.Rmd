@@ -1,0 +1,73 @@
+---
+title: "new_insect_viruses"
+author: Anindita Brahma
+output: new_insect_virus.html
+---
+#Introduction
+This script is for formatting the headers of the fasta file containing 231 virus genomes from Kafer et al., 2019.
+
+```{r setup, include=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+libraries <- c("seqinr", "seqRFLP",
+               "lintr", "tidyr", "dplyr",
+               "stringr")
+for (lib in libraries) {
+  if (require(package = lib, character.only = TRUE)) {
+    message("Library loaded: ", lib)
+  } else {
+    print("Installing")
+    BiocManager::install(lib, Ncpus = 10, update = TRUE)
+    library(lib, character.only = TRUE)
+    message("Library loaded: ", lib)
+  }
+}
+
+```
+
+## Format fasta headers to incorporate taxonomic id
+
+```{r}
+#Read fasta file
+virus_seq <- read.fasta(file = "input/insect_virus.fasta")
+
+#Split the fasta header and sequence in two columns
+virus_seq_split <- data.frame(fragment = names(virus_seq),
+                              sequence = unlist(getSequence(virus_seq,
+                                                        as.string = TRUE)))
+
+#Remove all characters after '_segment_' in each row of column 'fragment' 
+virus_seq_split$virus_name <- sub(pattern = "_segment_.*",
+                                   replacement = "", x = virus_seq_split$fragment) 
+
+#Read taxonomic id
+taxid <- read.table(file = "input/virus_taxid.txt", header = FALSE)
+colnames(taxid) <- c("virus_name", "taxid")
+
+taxid$kraken_format <- rep(x = "|kraken:taxid|", times = length(taxid$virus_name))
+
+#Paste taxonomy id and kraken format
+taxid$taxid_format <- paste(taxid$kraken_format, taxid$taxid)
+
+#Merge the files by matching names of viruses
+new_insect_virus <- merge(virus_seq_split, taxid, by = "virus_name", all.x = TRUE,
+              all.y = TRUE)
+
+#Paste fragment and taxid_format
+new_insect_virus$fragment_taxid <- paste(new_insect_virus$fragment,
+                                     new_insect_virus$taxid_format)
+new_insect_virus_reduced <- data.frame(na.omit(new_insect_virus))
+
+#Remove all columns except fragment_taxid and sequence
+columns_for_new_fasta <- as.vector(c("fragment_taxid", "sequence"))
+new_fasta_df <- new_insect_virus_reduced[, columns_for_new_fasta]
+
+#Remove whitespace from fragment_name
+new_fasta_df$fragment_taxid <- gsub(pattern = '\\s+', replacement = '',
+                                    new_fasta_df$fragment_taxid)
+#Convert this df into fasta format
+dataframe2fas(x = new_fasta_df, file = "results/insect_virus_kraken2_format.fasta")
+
+```
+

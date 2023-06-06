@@ -1,0 +1,166 @@
+---
+title: "viral_load_metadata"
+authors: Anindita Brahma, Yannick Wurm
+output: viral_load_metadata.html
+---
+
+#Introduction
+This script is for preparing metadata for viral load analyses.
+Input data contains extracted viral reads from Kraken2 reports.
+
+```{r setup, include=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+libraries <- c("dplyr", "lme4",
+               "ggplot2", "lintr", "plyr")
+for (lib in libraries) {
+  if (require(package = lib, character.only = TRUE)) {
+    message("Library loaded: ", lib)
+  } else {
+    print("Installing")
+    BiocManager::install(lib, Ncpus = 10, update = TRUE)
+    library(lib, character.only = TRUE)
+    message("Library loaded: ", lib)
+  }
+}
+
+```
+#Step 1. Prepare metadata for viral load analysis with all six datasets
+#Extract viral families containing more than 100 reads.
+```{r}
+# Write a function
+# sample: sample_id_viral_load.txt obtained from 02-Extract_virus_reads
+# sample_details: Sample details for Fig 1A&B (supplementary dataset)
+
+virus_reads <- function(sample, sample_details, id, social_form, tissue) {
+   sample <- read.table(file = sample, header = FALSE,
+                        sep = "\t", quote = "")
+   read_data <- read.table(file = sample_details, header = TRUE,
+                           sep = ",")
+   colnames(sample) <- c("percentage_reads", "fragment_number",
+                       "fragment_assigned", "tax_unit",
+                       "taxid" ,"name")
+   sample$id <- rep(x = id, times = length(sample$name))
+   sample$social_form <- rep(x = social_form,
+                             times = length(sample$name))
+   sample$tissue <- rep(x = tissue,
+                       times = length(sample$name))
+   
+   #Subset for family
+   sample_family <- subset(x = sample, subset = tax_unit == "F")
+   
+   #Remove whitespace from name
+   family_name <- data.frame(gsub('\\s+', '', sample_family$name))
+   colnames(family_name) <- "family_name"
+   
+   #Add column
+   sample_family$family_name <- family_name$family_name
+   
+   #Sample species with fragment number > 100
+   sample_family_subset <- subset(x = sample_family,
+                                   subset = fragment_number > 100)
+   
+   #Get caste, read counts, experiment_id
+   sample_caste <- subset(x = read_data$caste,
+                          subset = read_data$id == id)
+   sample_family_subset$caste <- rep(x = sample_caste,
+                              times = length(sample_family_subset$id))
+   sample_experiment_id <- subset(x = read_data$experiment_id,
+                          subset = read_data$id == id)
+   sample_family_subset$experiment_id <- rep(x = sample_experiment_id,
+                              times = length(sample_family_subset$id))
+   
+   total_read <- subset(x = read_data$read_ant_virus,
+                        subset = read_data$id == id)
+   sample_family_subset$total_read <- rep(x = total_read,
+                                   times = length(sample_family_subset$id))
+   
+   #Normalise virus counts
+   sample_family_subset$proportion_read <- sample_family_subset$fragment_number / sample_family_subset$total_read
+   
+   #Remove unnecessary columns
+   sample_family_subset$name <- NULL
+   sample_family_subset$percentage_reads <- NULL
+   return(sample_family_subset)
+}
+
+# Use this function to extract virus families from sample_id_viral_load.txt
+# Next combine all outputs into a single file: viral_load_metadata
+
+# Write the combined file into a directory
+write.table(x = viral_load_metadata, file = "viral_load_metadata.csv",
+            sep = ",", col.names = TRUE, row.names = FALSE)
+
+```
+#Step 2. Prepare metadata for focused viral load analysis with one dataset.
+#Extract viral families containing more than 100 reads.
+
+```{r}
+#Write a function
+# sample: sample_id_viral_load.txt obtained from 02-Extract_virus_reads
+# sample_details: Sample details for Fig 1C&D (supplementary dataset)
+
+virus_reads_focused <- function(sample, sample_details, id, social_form, tissue, genotype, colony_id, sample_id) {
+   sample <- read.table(file = sample, header = FALSE,
+                        sep = "\t", quote = "")
+   read_data <- read.table(file = sample_details, header = TRUE,
+                           sep = ",")
+   colnames(sample) <- c("percentage_reads", "fragment_number",
+                       "fragment_assigned", "tax_unit",
+                       "taxid" ,"name")
+   sample$id <- rep(x = id, times = length(sample$name))
+   sample$social_form <- rep(x = social_form,
+                             times = length(sample$name))
+   sample$tissue <- rep(x = tissue,
+                       times = length(sample$name))
+   sample$genotype <- rep(x = genotype,
+                          times = length(sample$name))
+   sample$colony_id <- rep(x = colony_id,
+                          times = length(sample$name))
+   sample$sample_id <- rep(x = sample_id,
+                          times = length(sample$name))
+   #Subset for family
+   sample_family <- subset(x = sample, subset = tax_unit == "F")
+   
+   #Remove whitespace from name
+   family_name <- data.frame(gsub('\\s+', '', sample_family$name))
+   colnames(family_name) <- "family_name"
+   
+   #Add column
+   sample_family$family_name <- family_name$family_name
+   
+   #Sample families with fragment number > 100
+   sample_family_subset <- subset(x = sample_family,
+                                   subset = fragment_number > 100)
+   #Get caste, read counts, experiment_id
+   sample_caste <- subset(x = read_data$caste,
+                          subset = read_data$id == id)
+   sample_family_subset$caste <- rep(x = sample_caste,
+                              times = length(sample_family_subset$id))
+   sample_experiment_id <- subset(x = read_data$experiment_id,
+                          subset = read_data$id == id)
+   sample_family_subset$experiment_id <- rep(x = sample_experiment_id,
+                              times = length(sample_family_subset$id))
+   
+   total_read <- subset(x = read_data$read_ant_virus,
+                        subset = read_data$id == id)
+   sample_family_subset$total_read <- rep(x = total_read,
+                                   times = length(sample_family_subset$id))
+   #Normalise virus counts
+   sample_family_subset$proportion_read <- sample_family_subset$fragment_number / sample_family_subset$total_read
+   
+   #Remove unnecessary columns
+   sample_family_subset$name <- NULL
+   sample_family_subset$percentage_reads <- NULL
+   return(sample_family_subset)
+}
+
+# Use this function to extract virus families from sample_id_viral_load.txt
+# Next combine all outputs into a single file: viral_load_focused_metadata
+
+# Write the combined file into a directory
+write.table(x = viral_load_focused_metadata, file = "viral_load_focused_metadata.csv",
+            sep = ",", col.names = TRUE, row.names = FALSE)
+
+```
